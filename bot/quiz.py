@@ -53,7 +53,7 @@ def get_questions_and_answers() -> list:
 
 def get_random_question() -> str:
     loaded_quiz = get_questions_and_answers()
-    questions_count = len(loaded_quiz)
+    questions_count = len(loaded_quiz) - 1
     random_question_index = random.randint(0, questions_count)
 
     return loaded_quiz[random_question_index]["Вопрос"]
