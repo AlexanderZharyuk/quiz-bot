@@ -1,56 +1,59 @@
-import re
 import os
-import json
+import random
+import re
+
+
+QUESTIONS_FOLDER = "quiz-questions/"
 
 
 def parse_questions_and_answers() -> tuple:
-    quiz_filenames = os.listdir('../quiz-questions')
+    quiz_filenames = os.listdir(QUESTIONS_FOLDER)
     questions = []
     answers = []
 
     for filename in quiz_filenames:
-        filepath = os.path.join('../quiz-questions', filename)
+        filepath = os.path.join(QUESTIONS_FOLDER, filename)
 
-        with open(filepath, 'r', encoding='KOI8-R') as file:
-            quiz_file = file.read().split('\n\n')
+        with open(filepath, "r", encoding="KOI8-R") as file:
+            quiz_file = file.read().split("\n\n")
 
         for row in quiz_file:
-            if re.search('Вопрос', row):
-                question_text = row.split('\n')[1:]
-                question = ' '.join(question_text)
+            if re.search("Вопрос", row):
+                question_text = row.split("\n")[1:]
+                question = " ".join(question_text)
 
-                if not question.find('Вопрос'):
-                    start_index = question.find(':') + 2
+                if not question.find("Вопрос"):
+                    start_index = question.find(":") + 2
                     question = question[start_index:]
 
                 questions.append(question)
 
-            if re.search('Ответ', row):
-                answer_text = row.split('\n')[1:]
-                answer = ' '.join(answer_text)
+            if re.search("Ответ", row):
+                answer_text = row.split("\n")[1:]
+                answer = " ".join(answer_text)
                 answers.append(answer)
 
     return questions, answers
 
 
-def get_questions_and_answers() -> dict:
+def get_questions_and_answers() -> list:
     questions, answers = parse_questions_and_answers()
-    questions_and_answers = dict(zip(questions, answers))
-    questions = {}
+    quizzes = dict(zip(questions, answers))
+    questions_and_answers = []
 
-    for question_number, (question, answer) in enumerate(
-            questions_and_answers.items(),
-            start=1):
-        questions[question_number] = {
+    for question, answer in quizzes.items():
+        quiz = {
             "Вопрос": question,
             "Ответ": answer
         }
+        questions_and_answers.append(quiz)
 
-    return questions
+    return questions_and_answers
 
 
-def create_quiz_file() -> None:
-    questions = get_questions_and_answers()
+def get_random_question() -> str:
+    loaded_quiz = get_questions_and_answers()
+    questions_count = len(loaded_quiz)
+    random_question_index = random.randint(0, questions_count)
 
-    with open('../quiz-questions/qa.json', 'w') as json_file:
-        json.dump(questions, json_file, ensure_ascii=False, indent=4)
+    return loaded_quiz[random_question_index]["Вопрос"]

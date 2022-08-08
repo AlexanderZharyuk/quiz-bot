@@ -7,8 +7,10 @@ from telegram.ext import (Updater, CommandHandler, MessageHandler,
 from telegram import Update, ReplyKeyboardMarkup
 from dotenv import load_dotenv
 
+from quiz import get_random_question
 
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
+
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s",
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -28,16 +30,18 @@ def start(update: Update, context: CallbackContext):
 
 
 def echo(update: Update, context: CallbackContext):
-    update.message.reply_text(update.message.text)
+    if update.message.text == "Новый вопрос":
+        question = get_random_question()
+        update.message.reply_text(question)
 
 
 def error(bot, update, error):
-    logger.warning('Update "%s" caused error "%s"', update, error)
+    logger.warning("Update '%s' caused error '%s'", update, error)
 
 
 def main():
     load_dotenv()
-    telegram_bot_token = os.environ['TELEGRAM_TOKEN']
+    telegram_bot_token = os.environ["TELEGRAM_TOKEN"]
 
     updater = Updater(token=telegram_bot_token, use_context=True)
     dp = updater.dispatcher
@@ -49,5 +53,5 @@ def main():
     updater.idle()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
