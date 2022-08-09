@@ -74,8 +74,9 @@ def user_give_up(event):
     question = get_random_question()
     database.set(event.user_id, question)
 
-    send_message(event, text=f"Правильный ответ был: {correct_answer}")
-    send_message(event, text=question)
+    send_message(event, text=f"Правильный ответ был: {correct_answer}\n"
+                             f"Чтобы получить новый вопрос нажми "
+                             f"кнопку «Новый вопрос»")
 
 
 if __name__ == "__main__":

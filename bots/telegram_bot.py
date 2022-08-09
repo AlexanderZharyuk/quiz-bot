@@ -78,10 +78,9 @@ def user_give_up(update: Update, context: CallbackContext):
     new_question = get_random_question()
     database.set(update.message.from_user.id, new_question)
 
-    update.message.reply_text(f"Правильный ответ был: {correct_answer}")
-    update.message.reply_text(new_question)
-
-    return ConversationPoints.USER_ANSWER.value
+    update.message.reply_text(f"Правильный ответ был: {correct_answer}\n"
+                              f"Чтобы продолжить нажми кнопку «Новый вопрос»")
+    return ConversationPoints.NEW_QUESTION.value
 
 
 def error(bot, update, error):
