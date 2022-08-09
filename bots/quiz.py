@@ -1,9 +1,10 @@
 import os
+import sys
 import random
 import re
 
-
-QUESTIONS_FOLDER = "../quiz-questions/"
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+QUESTIONS_FOLDER = "quiz-questions/"
 
 
 def parse_questions_and_answers() -> tuple:
