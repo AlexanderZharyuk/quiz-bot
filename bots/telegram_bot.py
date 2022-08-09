@@ -4,14 +4,12 @@ import logging
 
 from enum import Enum
 
-import redis
-
 from telegram.ext import (Updater, CommandHandler, MessageHandler,
                           Filters, CallbackContext, ConversationHandler)
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from dotenv import load_dotenv
 
 from quiz import get_random_question, get_questions_and_answers
+from database import connect_to_db
 
 
 class ConversationPoints(Enum):
@@ -23,15 +21,7 @@ logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s",
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-load_dotenv()
-redis_host = os.environ["REDIS_HOST"]
-redis_port = os.environ["REDIS_PORT"]
-redis_password = os.environ["REDIS_PASSWORD"]
-database = redis.Redis(
-    host=redis_host,
-    port=redis_port,
-    password=redis_password
-)
+database = connect_to_db()
 
 
 def get_answer(update: Update):
@@ -67,7 +57,10 @@ def handle_new_question_request(update: Update, context: CallbackContext):
 def handle_solution_attempt(update: Update, context: CallbackContext):
     user_answer = update.message.text.capitalize()
     answer = get_answer(update)
-    answers_matches = difflib.SequenceMatcher(None, user_answer, answer).ratio()
+    answers_matches = difflib.SequenceMatcher(
+        None,
+        user_answer,
+        answer).ratio()
 
     if answers_matches > 0.8:
         update.message.reply_text(
