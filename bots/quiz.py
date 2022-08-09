@@ -3,7 +3,7 @@ import random
 import re
 
 
-QUESTIONS_FOLDER = "quiz-questions/"
+QUESTIONS_FOLDER = "../quiz-questions/"
 
 
 def parse_questions_and_answers() -> tuple:
