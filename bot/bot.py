@@ -34,6 +34,15 @@ database = redis.Redis(
 )
 
 
+def get_answer(update: Update):
+    question = database.get(update.message.from_user.id).decode()
+    questions_and_answers = get_questions_and_answers()
+    for quiz in questions_and_answers:
+        if quiz["Вопрос"] == question:
+            answer = quiz["Ответ"].split("(")[0].split(".")[0]
+            return answer
+
+
 def start(update: Update, context: CallbackContext):
     reply_keyboard = [["Новый вопрос", "Сдаться"], ["Мой счёт"]]
     greeting_message = "Привет! Я бот для викторин!"
@@ -42,7 +51,7 @@ def start(update: Update, context: CallbackContext):
         text=greeting_message,
         reply_markup=ReplyKeyboardMarkup(
             reply_keyboard,
-            resize_keyboard=True,
+            resize_keyboard=True
         )
     )
     return ConversationPoints.NEW_QUESTION.value
@@ -56,17 +65,11 @@ def handle_new_question_request(update: Update, context: CallbackContext):
 
 
 def handle_solution_attempt(update: Update, context: CallbackContext):
-    user_answer = update.message.text
-    question = database.get(update.message.from_user.id).decode()
-    questions_and_answers = get_questions_and_answers()
-    for quiz in questions_and_answers:
-        if quiz["Вопрос"] == question:
-            answer = quiz["Ответ"].split("(")[0].split(".")[0]
-            break
+    user_answer = update.message.text.capitalize()
+    answer = get_answer(update)
+    answers_matches = difflib.SequenceMatcher(None, user_answer, answer).ratio()
 
-    answer_matches = difflib.SequenceMatcher(None, user_answer, answer).ratio()
-
-    if answer_matches > 0.8:
+    if answers_matches > 0.8:
         update.message.reply_text(
             text="Правильно! Поздравляю!"
             " Для следующего вопроса нажми «Новый вопрос»",
@@ -74,6 +77,17 @@ def handle_solution_attempt(update: Update, context: CallbackContext):
         return ConversationPoints.NEW_QUESTION.value
 
     update.message.reply_text("Неправильно… Попробуешь ещё раз?")
+    return ConversationPoints.USER_ANSWER.value
+
+
+def user_give_up(update: Update, context: CallbackContext):
+    correct_answer = get_answer(update)
+    new_question = get_random_question()
+    database.set(update.message.from_user.id, new_question)
+
+    update.message.reply_text(f"Правильный ответ был: {correct_answer}")
+    update.message.reply_text(new_question)
+
     return ConversationPoints.USER_ANSWER.value
 
 
@@ -110,6 +124,14 @@ def main():
 
             ConversationPoints.USER_ANSWER.value:
                 [
+                    CommandHandler(
+                        "cancel",
+                        cancel
+                    ),
+                    MessageHandler(
+                        Filters.regex("^(Сдаться)$"),
+                        user_give_up,
+                    ),
                     MessageHandler(
                         Filters.text,
                         handle_solution_attempt
