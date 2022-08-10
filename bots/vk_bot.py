@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import VkLongPoll, VkEventType
 
+from general_functions import get_answer
 from quiz import get_random_question, get_questions_and_answers
 
 
@@ -43,18 +44,12 @@ def get_new_question(event, quizzes, database):
     send_message(event, text=question)
 
 
-def get_answer(event, database):
-    question = database.get(event.user_id).decode()
-    questions_and_answers = get_questions_and_answers()
-    for quiz in questions_and_answers:
-        if quiz["Вопрос"] == question:
-            answer = quiz["Ответ"].split("(")[0].split(".")[0]
-            return answer
-
-
-def handle_solution_attempt(event, database):
+def handle_solution_attempt(event, quizzes, database):
     user_answer = event.text.capitalize()
-    answer = get_answer(event, database)
+    answer = get_answer(
+        user_id=event.user_id,
+        quizzes=quizzes,
+        database=database)
     answers_matches = difflib.SequenceMatcher(
         None,
         user_answer,
@@ -68,11 +63,14 @@ def handle_solution_attempt(event, database):
 
 
 def give_up(event, quizzes, database):
-    correct_answer = get_answer(event, database)
+    answer = get_answer(
+        user_id=event.user_id,
+        quizzes=quizzes,
+        database=database)
     question = get_random_question(quizzes)
     database.set(event.user_id, question)
 
-    send_message(event, text=f"Правильный ответ был: {correct_answer}\n"
+    send_message(event, text=f"Правильный ответ был: {answer}\n"
                              f"Чтобы получить новый вопрос нажми "
                              f"кнопку «Новый вопрос»")
 
@@ -104,4 +102,4 @@ if __name__ == "__main__":
             elif event.text == "Сдаться":
                 give_up(event, quizzes, database)
             else:
-                handle_solution_attempt(event, database)
+                handle_solution_attempt(event, quizzes, database)

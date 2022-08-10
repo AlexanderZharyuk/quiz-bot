@@ -11,6 +11,7 @@ from telegram.ext import (Updater, CommandHandler, MessageHandler,
                           Filters, CallbackContext, ConversationHandler)
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
+from general_functions import get_answer
 from quiz import get_random_question, get_questions_and_answers
 
 
@@ -20,15 +21,6 @@ class ConversationPoints(Enum):
 
 
 logger = logging.getLogger(__name__)
-
-
-def get_answer(update: Update, context: CallbackContext, database: redis):
-    question = database.get(update.message.from_user.id).decode()
-    questions_and_answers = get_questions_and_answers()
-    for quiz in questions_and_answers:
-        if quiz["Вопрос"] == question:
-            answer = quiz["Ответ"].split("(")[0].split(".")[0]
-            return answer
 
 
 def start(update: Update, context: CallbackContext):
@@ -59,9 +51,13 @@ def handle_new_question_request(
 def handle_solution_attempt(
         update: Update,
         context: CallbackContext,
+        quizzes,
         database: redis):
     user_answer = update.message.text.capitalize()
-    answer = get_answer(update=update, context=context, database=database)
+    answer = get_answer(
+        user_id=update.message.from_user.id,
+        quizzes=quizzes,
+        database=database)
     answers_matches = difflib.SequenceMatcher(
         None,
         user_answer,
@@ -83,7 +79,10 @@ def give_up(
         context: CallbackContext,
         database: redis,
         quizzes: list):
-    answer = get_answer(update=update, context=context, database=database)
+    answer = get_answer(
+        user_id=update.message.from_user.id,
+        quizzes=quizzes,
+        database=database)
     new_question = get_random_question(quizzes)
     database.set(update.message.from_user.id, new_question)
 
@@ -151,14 +150,15 @@ def main():
                         Filters.regex("^(Сдаться)$"),
                         functools.partial(
                             give_up,
-                            database=database,
-                            quizzes=quizzes
+                            quizzes=quizzes,
+                            database=database
                         )
                     ),
                     MessageHandler(
                         Filters.text,
                         functools.partial(
                             handle_solution_attempt,
+                            quizzes=quizzes,
                             database=database
                         )
                     )
