@@ -11,8 +11,7 @@ from telegram.ext import (Updater, CommandHandler, MessageHandler,
                           Filters, CallbackContext, ConversationHandler)
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
-from general_functions import get_answer
-from quiz import get_random_question, get_questions_and_answers
+from quiz import get_random_question, get_questions_and_answers, get_answer
 
 
 class ConversationPoints(Enum):

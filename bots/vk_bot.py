@@ -9,8 +9,7 @@ from dotenv import load_dotenv
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import VkLongPoll, VkEventType
 
-from general_functions import get_answer
-from quiz import get_random_question, get_questions_and_answers
+from quiz import get_random_question, get_questions_and_answers, get_answer
 
 
 def create_keyboard():

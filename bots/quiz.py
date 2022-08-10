@@ -1,6 +1,8 @@
 import random
 import re
 
+import redis
+
 
 QUIZ_FILEPATH = "quiz-questions/quizzes.txt"
 
@@ -44,3 +46,11 @@ def get_random_question(loaded_quiz: list) -> str:
     questions_count = len(loaded_quiz) - 1
     random_question_index = random.randint(0, questions_count)
     return loaded_quiz[random_question_index]["Вопрос"]
+
+
+def get_answer(user_id: int, quizzes: list, database: redis):
+    question = database.get(user_id).decode()
+    for quiz in quizzes:
+        if quiz["Вопрос"] == question:
+            answer = quiz["Ответ"].split("(")[0].split(".")[0]
+            return answer
