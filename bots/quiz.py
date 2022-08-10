@@ -13,7 +13,7 @@ def get_questions_and_answers() -> list:
         quiz_file = file.read().split("\n\n")
 
     for row in quiz_file:
-        if re.search("Вопрос", row):
+        if re.search(r"Вопрос", row):
             question_text = row.split("\n")[1:]
             question = " ".join(question_text)
 
@@ -22,7 +22,7 @@ def get_questions_and_answers() -> list:
                 question = question[start_index:]
             questions.append(question)
 
-        if re.search("Ответ", row):
+        if re.search(r"Ответ", row):
             answer_text = row.split("\n")[1:]
             answer = " ".join(answer_text)
             answers.append(answer)
