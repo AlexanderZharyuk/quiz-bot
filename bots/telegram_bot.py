@@ -1,15 +1,17 @@
 import difflib
 import os
 import logging
+import functools
 
 from enum import Enum
 
+from dotenv import load_dotenv
+import redis
 from telegram.ext import (Updater, CommandHandler, MessageHandler,
                           Filters, CallbackContext, ConversationHandler)
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
 from quiz import get_random_question, get_questions_and_answers
-from database import connect_to_db
 
 
 class ConversationPoints(Enum):
@@ -17,14 +19,10 @@ class ConversationPoints(Enum):
     USER_ANSWER = 1
 
 
-logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s",
-                    level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-database = connect_to_db()
 
-
-def get_answer(update: Update):
+def get_answer(update: Update, context: CallbackContext, database: redis):
     question = database.get(update.message.from_user.id).decode()
     questions_and_answers = get_questions_and_answers()
     for quiz in questions_and_answers:
@@ -47,16 +45,23 @@ def start(update: Update, context: CallbackContext):
     return ConversationPoints.NEW_QUESTION.value
 
 
-def handle_new_question_request(update: Update, context: CallbackContext):
-    question = get_random_question()
+def handle_new_question_request(
+        update: Update,
+        context: CallbackContext,
+        quizzes: list,
+        database: redis):
+    question = get_random_question(quizzes)
     database.set(update.message.from_user.id, question)
     update.message.reply_text(question)
     return ConversationPoints.USER_ANSWER.value
 
 
-def handle_solution_attempt(update: Update, context: CallbackContext):
+def handle_solution_attempt(
+        update: Update,
+        context: CallbackContext,
+        database: redis):
     user_answer = update.message.text.capitalize()
-    answer = get_answer(update)
+    answer = get_answer(update=update, context=context, database=database)
     answers_matches = difflib.SequenceMatcher(
         None,
         user_answer,
@@ -73,17 +78,21 @@ def handle_solution_attempt(update: Update, context: CallbackContext):
     return ConversationPoints.USER_ANSWER.value
 
 
-def user_give_up(update: Update, context: CallbackContext):
-    correct_answer = get_answer(update)
-    new_question = get_random_question()
+def user_give_up(
+        update: Update,
+        context: CallbackContext,
+        database: redis,
+        quizzes: list):
+    answer = get_answer(update=update, context=context, database=database)
+    new_question = get_random_question(quizzes)
     database.set(update.message.from_user.id, new_question)
 
-    update.message.reply_text(f"Правильный ответ был: {correct_answer}\n"
+    update.message.reply_text(f"Правильный ответ был: {answer}\n"
                               f"Чтобы продолжить нажми кнопку «Новый вопрос»")
     return ConversationPoints.NEW_QUESTION.value
 
 
-def error(bot, update, error):
+def error(update, error):
     logger.warning("Update '%s' caused error '%s'", update, error)
 
 
@@ -97,22 +106,40 @@ def cancel(update: Update, context: CallbackContext) -> int:
 
 
 def main():
+    load_dotenv()
+    redis_host = os.environ["REDIS_HOST"]
+    redis_port = os.environ["REDIS_PORT"]
+    redis_password = os.environ["REDIS_PASSWORD"]
     telegram_bot_token = os.environ["TELEGRAM_TOKEN"]
+
+    logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s",
+                        level=logging.INFO)
 
     updater = Updater(token=telegram_bot_token, use_context=True)
     dp = updater.dispatcher
+
+    quizzes = get_questions_and_answers()
+    database = redis.Redis(
+        host=redis_host,
+        port=redis_port,
+        password=redis_password
+    )
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
 
         states={
             ConversationPoints.NEW_QUESTION.value:
-                [
+                {
                     MessageHandler(
                         Filters.regex("^(Новый вопрос)$"),
-                        handle_new_question_request
+                        functools.partial(
+                            handle_new_question_request,
+                            quizzes=quizzes,
+                            database=database
+                        ),
                     )
-                ],
+                },
 
             ConversationPoints.USER_ANSWER.value:
                 [
@@ -122,11 +149,18 @@ def main():
                     ),
                     MessageHandler(
                         Filters.regex("^(Сдаться)$"),
-                        user_give_up,
+                        functools.partial(
+                            user_give_up,
+                            database=database,
+                            quizzes=quizzes
+                        )
                     ),
                     MessageHandler(
                         Filters.text,
-                        handle_solution_attempt
+                        functools.partial(
+                            handle_solution_attempt,
+                            database=database
+                        )
                     )
                 ],
         },

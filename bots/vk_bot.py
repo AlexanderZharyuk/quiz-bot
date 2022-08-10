@@ -2,16 +2,14 @@ import difflib
 import os
 import random
 
+import redis
 import vk_api as vk
 
+from dotenv import load_dotenv
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import VkLongPoll, VkEventType
 
 from quiz import get_random_question, get_questions_and_answers
-from database import connect_to_db
-
-
-database = connect_to_db()
 
 
 def keyboard_settings():
@@ -39,13 +37,13 @@ def start(event):
     send_message(event, text=greeting_message)
 
 
-def new_question(event):
-    question = get_random_question()
+def new_question(event, quizzes, database):
+    question = get_random_question(quizzes)
     database.set(event.user_id, question)
     send_message(event, text=question)
 
 
-def get_answer(event):
+def get_answer(event, database):
     question = database.get(event.user_id).decode()
     questions_and_answers = get_questions_and_answers()
     for quiz in questions_and_answers:
@@ -54,9 +52,9 @@ def get_answer(event):
             return answer
 
 
-def handle_solution_attempt(event):
+def handle_solution_attempt(event, database):
     user_answer = event.text.capitalize()
-    answer = get_answer(event)
+    answer = get_answer(event, database)
     answers_matches = difflib.SequenceMatcher(
         None,
         user_answer,
@@ -69,9 +67,9 @@ def handle_solution_attempt(event):
         send_message(event, text="Неправильно… Попробуешь ещё раз?")
 
 
-def user_give_up(event):
-    correct_answer = get_answer(event)
-    question = get_random_question()
+def user_give_up(event, quizzes, database):
+    correct_answer = get_answer(event, database)
+    question = get_random_question(quizzes)
     database.set(event.user_id, question)
 
     send_message(event, text=f"Правильный ответ был: {correct_answer}\n"
@@ -80,19 +78,30 @@ def user_give_up(event):
 
 
 if __name__ == "__main__":
+    load_dotenv()
+    redis_host = os.environ["REDIS_HOST"]
+    redis_port = os.environ["REDIS_PORT"]
+    redis_password = os.environ["REDIS_PASSWORD"]
     vk_api_token = os.environ["VK_API_TOKEN"]
 
     vk_session = vk.VkApi(token=vk_api_token)
     vk_api = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)
 
+    quizzes = get_questions_and_answers()
+    database = redis.Redis(
+        host=redis_host,
+        port=redis_port,
+        password=redis_password
+    )
+
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW and event.to_me:
             if event.text.capitalize() == "Старт":
                 start(event)
             elif event.text == "Новый вопрос":
-                new_question(event)
+                new_question(event, quizzes, database)
             elif event.text == "Сдаться":
-                user_give_up(event)
+                user_give_up(event, quizzes, database)
             else:
-                handle_solution_attempt(event)
+                handle_solution_attempt(event, database)
