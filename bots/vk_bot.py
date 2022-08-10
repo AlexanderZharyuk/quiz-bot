@@ -12,7 +12,7 @@ from vk_api.longpoll import VkLongPoll, VkEventType
 from quiz import get_random_question, get_questions_and_answers
 
 
-def keyboard_settings():
+def create_keyboard():
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button('Новый вопрос', color=VkKeyboardColor.PRIMARY)
     keyboard.add_button('Сдаться', color=VkKeyboardColor.NEGATIVE)
@@ -22,7 +22,7 @@ def keyboard_settings():
 
 
 def send_message(event, text):
-    keyboard = keyboard_settings()
+    keyboard = create_keyboard()
     vk_api.messages.send(
         user_id=event.user_id,
         message=text,
@@ -37,7 +37,7 @@ def start(event):
     send_message(event, text=greeting_message)
 
 
-def new_question(event, quizzes, database):
+def get_new_question(event, quizzes, database):
     question = get_random_question(quizzes)
     database.set(event.user_id, question)
     send_message(event, text=question)
@@ -67,7 +67,7 @@ def handle_solution_attempt(event, database):
         send_message(event, text="Неправильно… Попробуешь ещё раз?")
 
 
-def user_give_up(event, quizzes, database):
+def give_up(event, quizzes, database):
     correct_answer = get_answer(event, database)
     question = get_random_question(quizzes)
     database.set(event.user_id, question)
@@ -100,8 +100,8 @@ if __name__ == "__main__":
             if event.text.capitalize() == "Старт":
                 start(event)
             elif event.text == "Новый вопрос":
-                new_question(event, quizzes, database)
+                get_new_question(event, quizzes, database)
             elif event.text == "Сдаться":
-                user_give_up(event, quizzes, database)
+                give_up(event, quizzes, database)
             else:
                 handle_solution_attempt(event, database)

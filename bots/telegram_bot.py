@@ -78,7 +78,7 @@ def handle_solution_attempt(
     return ConversationPoints.USER_ANSWER.value
 
 
-def user_give_up(
+def give_up(
         update: Update,
         context: CallbackContext,
         database: redis,
@@ -92,7 +92,7 @@ def user_give_up(
     return ConversationPoints.NEW_QUESTION.value
 
 
-def error(update, error):
+def get_error(update, error):
     logger.warning("Update '%s' caused error '%s'", update, error)
 
 
@@ -150,7 +150,7 @@ def main():
                     MessageHandler(
                         Filters.regex("^(Сдаться)$"),
                         functools.partial(
-                            user_give_up,
+                            give_up,
                             database=database,
                             quizzes=quizzes
                         )
