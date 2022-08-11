@@ -11,6 +11,7 @@ from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import VkLongPoll, VkEventType
 
 from quiz import get_random_question, get_questions_and_answers, get_answer
+from database import update_user_last_question
 
 
 def create_keyboard():
@@ -39,18 +40,13 @@ def start(event):
 
 
 def get_new_question(event, quizzes, database):
+    user_id = f"user_vk_{event.user_id}"
     question = get_random_question(quizzes)
-    user = {
-        f"user_vk_{event.user_id}": {
-            "last_asked_question": question
-        }
-    }
-    get_users_with_questions = database.get("users").decode()
-    authorized_users = json.loads(get_users_with_questions)
-    authorized_users.update(user)
-    user_json = json.dumps(authorized_users, ensure_ascii=True)
-
-    database.set("users", user_json)
+    update_user_last_question(
+        database=database,
+        question=question,
+        user_id=user_id
+    )
     send_message(event, text=question)
 
 
@@ -68,6 +64,11 @@ def handle_solution_attempt(event, quizzes, database):
         answer).ratio()
 
     if answers_matches > 0.8:
+        get_users_with_questions = database.get("users").decode()
+        authorized_users = json.loads(get_users_with_questions)
+        authorized_users[user_id]["count"] += 1
+        user_json = json.dumps(authorized_users, ensure_ascii=True)
+        database.set("users", user_json)
         send_message(event, text="Правильно! Поздравляю! Для следующего "
                                  "вопроса нажми «Новый вопрос»")
     else:
@@ -82,21 +83,22 @@ def give_up(event, quizzes, database):
         database=database,
     )
     question = get_random_question(quizzes)
-    user = {
-        f"user_vk_{event.user_id}": {
-            "last_asked_question": question
-        }
-    }
-    get_users_with_questions = database.get("users").decode()
-    authorized_users = json.loads(get_users_with_questions)
-    authorized_users.update(user)
-    user_json = json.dumps(authorized_users, ensure_ascii=True)
-
-    database.set("users", user_json)
-
+    update_user_last_question(
+        database=database,
+        question=question,
+        user_id=user_id
+    )
     send_message(event, text=f"Правильный ответ был: {answer}\n"
                              f"Чтобы получить новый вопрос нажми "
                              f"кнопку «Новый вопрос»")
+
+
+def get_user_count(event, database: redis):
+    user_id = f"user_vk_{event.user_id}"
+    authorized_users = database.get("users").decode()
+    founded_user = json.loads(authorized_users)[user_id]
+    user_count = founded_user["count"]
+    send_message(event, text=f"Ваш счёт: {user_count}")
 
 
 if __name__ == "__main__":
@@ -116,6 +118,12 @@ if __name__ == "__main__":
         port=redis_port,
         password=redis_password
     )
+    try:
+        database.get("users").decode()
+    except AttributeError:
+        setup_db = {}
+        user_json = json.dumps(setup_db, ensure_ascii=True)
+        database.set("users", user_json)
 
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW and event.to_me:
@@ -125,5 +133,7 @@ if __name__ == "__main__":
                 get_new_question(event, quizzes, database)
             elif event.text == "Сдаться":
                 give_up(event, quizzes, database)
+            elif event.text == "Мой счёт":
+                get_user_count(event, database)
             else:
                 handle_solution_attempt(event, quizzes, database)

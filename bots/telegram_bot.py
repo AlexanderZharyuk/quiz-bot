@@ -14,6 +14,7 @@ from telegram.ext import (Updater, CommandHandler, MessageHandler,
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
 from quiz import get_random_question, get_questions_and_answers, get_answer
+from database import update_user_last_question
 
 
 class ConversationPoints(Enum):
@@ -43,19 +44,13 @@ def handle_new_question_request(
         context: CallbackContext,
         quizzes: dict,
         database: redis):
+    user_id = f"user_tg_{update.message.from_user.id}"
     question = get_random_question(quizzes)
-    user = {
-        f"user_tg_{update.message.from_user.id}": {
-            "last_asked_question": question
-        }
-    }
-
-    get_users_with_questions = database.get("users").decode()
-    authorized_users = json.loads(get_users_with_questions)
-    authorized_users.update(user)
-    user_json = json.dumps(authorized_users, ensure_ascii=True)
-
-    database.set("users", user_json)
+    update_user_last_question(
+        database=database,
+        question=question,
+        user_id=user_id
+    )
     update.message.reply_text(question)
     return ConversationPoints.USER_ANSWER.value
 
@@ -78,6 +73,11 @@ def handle_solution_attempt(
         answer).ratio()
 
     if answers_matches > 0.8:
+        get_users_with_questions = database.get("users").decode()
+        authorized_users = json.loads(get_users_with_questions)
+        authorized_users[user_id]["count"] += 1
+        user_json = json.dumps(authorized_users, ensure_ascii=True)
+        database.set("users", user_json)
         update.message.reply_text(
             text="Правильно! Поздравляю!"
             " Для следующего вопроса нажми «Новый вопрос»",
@@ -100,20 +100,24 @@ def give_up(
         database=database,
     )
     question = get_random_question(quizzes)
-    user = {
-        f"user_tg_{update.message.from_user.id}": {
-            "last_asked_question": question
-        }
-    }
-
-    get_users_with_questions = database.get("users").decode()
-    authorized_users = json.loads(get_users_with_questions)
-    authorized_users.update(user)
-    user_json = json.dumps(authorized_users, ensure_ascii=True)
-    database.set("users", user_json)
+    update_user_last_question(
+        question=question,
+        database=database,
+        user_id=user_id
+    )
 
     update.message.reply_text(f"Правильный ответ был: {answer}\n"
                               f"Чтобы продолжить нажми кнопку «Новый вопрос»")
+    return ConversationPoints.NEW_QUESTION.value
+
+
+def get_user_count(update: Update, context: CallbackContext, database: redis):
+    user_id = f"user_tg_{update.message.from_user.id}"
+    authorized_users = database.get("users").decode()
+    founded_user = json.loads(authorized_users)[user_id]
+    user_count = founded_user["count"]
+    update.message.reply_text(f"Ваш счёт: {user_count}")
+
     return ConversationPoints.NEW_QUESTION.value
 
 
@@ -150,6 +154,13 @@ def main():
         password=redis_password
     )
 
+    try:
+        database.get("users").decode()
+    except AttributeError:
+        setup_db = {}
+        user_json = json.dumps(setup_db, ensure_ascii=True)
+        database.set("users", user_json)
+
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
 
@@ -162,7 +173,14 @@ def main():
                             handle_new_question_request,
                             quizzes=quizzes,
                             database=database
-                        ),
+                        )
+                    ),
+                    MessageHandler(
+                        Filters.regex("^(Мой счёт)$"),
+                        functools.partial(
+                            get_user_count,
+                            database=database
+                        )
                     )
                 },
 
@@ -177,6 +195,13 @@ def main():
                         functools.partial(
                             give_up,
                             quizzes=quizzes,
+                            database=database
+                        )
+                    ),
+                    MessageHandler(
+                        Filters.regex("^(Мой счёт)$"),
+                        functools.partial(
+                            get_user_count,
                             database=database
                         )
                     ),
