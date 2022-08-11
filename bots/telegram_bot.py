@@ -1,12 +1,14 @@
 import difflib
 import os
+import json
 import logging
 import functools
+
+import redis
 
 from enum import Enum
 
 from dotenv import load_dotenv
-import redis
 from telegram.ext import (Updater, CommandHandler, MessageHandler,
                           Filters, CallbackContext, ConversationHandler)
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -39,10 +41,21 @@ def start(update: Update, context: CallbackContext):
 def handle_new_question_request(
         update: Update,
         context: CallbackContext,
-        quizzes: list,
+        quizzes: dict,
         database: redis):
     question = get_random_question(quizzes)
-    database.set(update.message.from_user.id, question)
+    user = {
+        f"user_tg_{update.message.from_user.id}": {
+            "last_asked_question": question
+        }
+    }
+
+    get_users_with_questions = database.get("users").decode()
+    authorized_users = json.loads(get_users_with_questions)
+    authorized_users.update(user)
+    user_json = json.dumps(authorized_users, ensure_ascii=True)
+
+    database.set("users", user_json)
     update.message.reply_text(question)
     return ConversationPoints.USER_ANSWER.value
 
@@ -50,13 +63,15 @@ def handle_new_question_request(
 def handle_solution_attempt(
         update: Update,
         context: CallbackContext,
-        quizzes,
+        quizzes: dict,
         database: redis):
     user_answer = update.message.text.capitalize()
+    user_id = f"user_tg_{update.message.from_user.id}"
     answer = get_answer(
-        user_id=update.message.from_user.id,
+        user_id=user_id,
         quizzes=quizzes,
-        database=database)
+        database=database,
+    )
     answers_matches = difflib.SequenceMatcher(
         None,
         user_answer,
@@ -77,13 +92,25 @@ def give_up(
         update: Update,
         context: CallbackContext,
         database: redis,
-        quizzes: list):
+        quizzes: dict):
+    user_id = f"user_tg_{update.message.from_user.id}"
     answer = get_answer(
-        user_id=update.message.from_user.id,
+        user_id=user_id,
         quizzes=quizzes,
-        database=database)
-    new_question = get_random_question(quizzes)
-    database.set(update.message.from_user.id, new_question)
+        database=database,
+    )
+    question = get_random_question(quizzes)
+    user = {
+        f"user_tg_{update.message.from_user.id}": {
+            "last_asked_question": question
+        }
+    }
+
+    get_users_with_questions = database.get("users").decode()
+    authorized_users = json.loads(get_users_with_questions)
+    authorized_users.update(user)
+    user_json = json.dumps(authorized_users, ensure_ascii=True)
+    database.set("users", user_json)
 
     update.message.reply_text(f"Правильный ответ был: {answer}\n"
                               f"Чтобы продолжить нажми кнопку «Новый вопрос»")

@@ -1,5 +1,6 @@
 import difflib
 import os
+import json
 import random
 
 import redis
@@ -39,16 +40,28 @@ def start(event):
 
 def get_new_question(event, quizzes, database):
     question = get_random_question(quizzes)
-    database.set(event.user_id, question)
+    user = {
+        f"user_vk_{event.user_id}": {
+            "last_asked_question": question
+        }
+    }
+    get_users_with_questions = database.get("users").decode()
+    authorized_users = json.loads(get_users_with_questions)
+    authorized_users.update(user)
+    user_json = json.dumps(authorized_users, ensure_ascii=True)
+
+    database.set("users", user_json)
     send_message(event, text=question)
 
 
 def handle_solution_attempt(event, quizzes, database):
     user_answer = event.text.capitalize()
+    user_id = f"user_vk_{event.user_id}"
     answer = get_answer(
-        user_id=event.user_id,
+        user_id=user_id,
         quizzes=quizzes,
-        database=database)
+        database=database
+    )
     answers_matches = difflib.SequenceMatcher(
         None,
         user_answer,
@@ -62,12 +75,24 @@ def handle_solution_attempt(event, quizzes, database):
 
 
 def give_up(event, quizzes, database):
+    user_id = f"user_vk_{event.user_id}"
     answer = get_answer(
-        user_id=event.user_id,
+        user_id=user_id,
         quizzes=quizzes,
-        database=database)
+        database=database,
+    )
     question = get_random_question(quizzes)
-    database.set(event.user_id, question)
+    user = {
+        f"user_vk_{event.user_id}": {
+            "last_asked_question": question
+        }
+    }
+    get_users_with_questions = database.get("users").decode()
+    authorized_users = json.loads(get_users_with_questions)
+    authorized_users.update(user)
+    user_json = json.dumps(authorized_users, ensure_ascii=True)
+
+    database.set("users", user_json)
 
     send_message(event, text=f"Правильный ответ был: {answer}\n"
                              f"Чтобы получить новый вопрос нажми "

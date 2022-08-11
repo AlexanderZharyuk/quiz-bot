@@ -1,3 +1,4 @@
+import json
 import random
 import re
 
@@ -7,7 +8,7 @@ import redis
 QUIZ_FILEPATH = "quiz-questions/quizzes.txt"
 
 
-def get_questions_and_answers() -> list:
+def get_questions_and_answers() -> dict:
     questions = []
     answers = []
 
@@ -30,27 +31,31 @@ def get_questions_and_answers() -> list:
             answers.append(answer)
 
     quizzes = dict(zip(questions, answers))
-    questions_and_answers = []
+    questions_and_answers = {}
 
-    for question, answer in quizzes.items():
+    for question_number, (question, answer) in enumerate(quizzes.items()):
         quiz = {
             "Вопрос": question,
             "Ответ": answer
         }
-        questions_and_answers.append(quiz)
+        questions_and_answers[f"question_{question_number}"] = quiz
 
     return questions_and_answers
 
 
-def get_random_question(loaded_quiz: list) -> str:
+def get_random_question(loaded_quiz: dict) -> str:
     questions_count = len(loaded_quiz) - 1
-    random_question_index = random.randint(0, questions_count)
-    return loaded_quiz[random_question_index]["Вопрос"]
+    random_question_number = random.randint(0, questions_count)
+    quiz = f"question_{random_question_number}"
+    return loaded_quiz[quiz]["Вопрос"]
 
 
-def get_answer(user_id: int, quizzes: list, database: redis):
-    question = database.get(user_id).decode()
-    for quiz in quizzes:
-        if quiz["Вопрос"] == question:
+def get_answer(user_id: str, quizzes: dict, database: redis):
+    get_users_with_questions = database.get("users").decode()
+    founded_user = json.loads(get_users_with_questions)[user_id]
+    user_question = founded_user["last_asked_question"]
+
+    for quiz in quizzes.values():
+        if quiz["Вопрос"] == user_question:
             answer = quiz["Ответ"].split("(")[0].split(".")[0]
             return answer
